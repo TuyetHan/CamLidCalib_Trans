@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 
 class PositionalEncoding(nn.Module):
     """This implementation is the same as in the Annotated transformer blog post
