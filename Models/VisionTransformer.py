@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from patchify import patchify
 from Encoder import EncoderBlock
 from PositionEncoding import PositionalEncoding, PositionalEncoding_Conv
 
 class Cam_ViT(nn.Module):
     def __init__(self, device, img_depth, patch_method, position_en_method, patch_dim,
-                 mlp_blocks, mlp_feature, mlp_heads, mlp_hidden=64, mlp_dropout=0.1, conv_channels = None):
+                 mlp_blocks, mlp_feature, mlp_heads,
+                 mlp_hidden=64, mlp_dropout=0.1, conv_channels = None):
         """
         Args:
           img_depth: Depth of image (Black white: 1, Colour: 3)
@@ -33,12 +33,15 @@ class Cam_ViT(nn.Module):
 
         # Create layers for patching image
         if self.patch_method == 1:
+          self.Patch = nn.Unfold(kernel_size = (self.PatchDim, self.PatchDim), stride = self.PatchDim)
           self.weightmatrix = nn.Parameter(torch.randn(1, patch_dim * patch_dim * img_depth, mlp_feature, device = self.device))
         elif  self.patch_method == 2:
           # TODO: Consider padding here
+          assert conv_channels is not None
           self.PatchConv = nn.Conv2d(img_depth, conv_channels, kernel_size = patch_dim, stride = patch_dim)
           self.weightmatrix = nn.Parameter(torch.randn(1, conv_channels, mlp_feature, device = self.device))
         elif self.patch_method == 3:
+          assert conv_channels is not None
           self.PatchConv = nn.Conv2d(img_depth, conv_channels, kernel_size=patch_dim)
           self.weightmatrix = nn.Parameter(torch.randn(1, conv_channels, mlp_feature, device = self.device))
 
@@ -56,36 +59,32 @@ class Cam_ViT(nn.Module):
     def forward(self, x):
         """
         Args:
-          x of shape (batch_size, img height, img width, img_depth): Input Image
+          x of shape (batch_size, img_depth, img height, img width): Input Image
 
         Returns:
-          z of shape (batch_size): Encoded output.
-
+          z of shape (batch_size, N, mlp_feature): Encoded output. N depends on patch method.
         """
 
         batch_size = x.shape[0]
         if  self.patch_method == 1:
-          # patches = np.array([patchify(img, (self.PatchDim, self.PatchDim, self.img_depth), step=self.PatchDim) for img in x])
-          patches = np.array([patchify(img, (self.img_depth, self.PatchDim, self.PatchDim), step=self.PatchDim) for img in x])
-          flatten_patches = np.reshape(torch.flatten(torch.Tensor(patches), start_dim=2), (batch_size, -1, self.PatchDim*self.PatchDim*self.img_depth))
-          patch_embeddings = torch.matmul(torch.Tensor(flatten_patches).to(self.device) , self.weightmatrix)
-
+          flatten_patches = nn.functional.unfold(x, (self.PatchDim, self.PatchDim), stride = self.PatchDim)
 
         elif self.patch_method == 2:
           patches = self.PatchConv(torch.Tensor(x).to(self.device))
-          flatten_patches = torch.flatten(patches, start_dim=2).permute(0, 2, 1)
-          patch_embeddings = torch.matmul(torch.Tensor(flatten_patches) , self.weightmatrix)
+          flatten_patches = torch.flatten(patches, start_dim=2)
 
         elif self.patch_method == 3:
           patches = self.PatchConv(torch.Tensor(x).to(self.device))
-          flatten_patches = torch.flatten(patches, start_dim=2).permute(0, 2, 1)  #transpose
-          patch_embeddings = torch.matmul(torch.Tensor(flatten_patches) , self.weightmatrix)
+          flatten_patches = torch.flatten(patches, start_dim=2)
+          # TODO: size off flatten patches very big. Pooling?
 
+        # Linear Projection
+        patch_embeddings = torch.matmul(torch.Tensor(flatten_patches.permute(0, 2, 1)) , self.weightmatrix)
         # Positional embeddings
-        y = self.PosEnc(patch_embeddings)
-
+        embedding = self.PosEnc(patch_embeddings)
+        
         # Pass input through encoder transformer.
         for f in self.EncBlocks:
-            y = f(y)
+            embedding = f(embedding)
 
-        return(y)
+        return(embedding)
