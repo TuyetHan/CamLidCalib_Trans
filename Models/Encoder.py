@@ -27,7 +27,7 @@ class EncoderBlock(nn.Module):
         self.Norm2 = nn.LayerNorm(n_features)
 
 
-    def forward(self, x):
+    def forward(self, x, attn_mask = None):
         """
         Args:
           x of shape (max_seq_length, batch_size, n_features): Input sequences.
@@ -39,8 +39,10 @@ class EncoderBlock(nn.Module):
 
         Note: All intermediate signals should be of shape (max_seq_length, batch_size, n_features).
         """
-
-        atten_out, atten_out_para = self.atten(x,x,x)
+        if attn_mask == None:
+          atten_out, atten_out_para = self.atten(x,x,x)
+        else:
+          atten_out, atten_out_para = self.atten(x,x,x, attn_mask = attn_mask)
         h1 = self.Norm1(x + self.Drop1(atten_out))
         h2 = self.Norm2(h1 + self.Drop2(self.FeedFW(h1)))
 
