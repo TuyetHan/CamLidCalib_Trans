@@ -1,0 +1,69 @@
+DATA:
+  data_name: kitti
+  # data_root: /home/p_trant/DataSets/KITTI
+  data_root: data/Kitti
+
+TRAIN:
+  # Network Architecture
+  # arch: TransformerCalib
+  img_depth: 3              # Fixed parameter. Avoid modify
+  pc_feat_dim: 1
+  num_points: 62464
+  resized_img: [187, 621]
+
+
+  mlp_blocks: 3             # For Attention in both Vit and PCtrs
+  mlp_feature: 64
+  mlp_heads: 8
+  mlp_hidden: 64 
+  mlp_dropout: 0.1 
+
+  rt_channels: 384          # Rotation Translation gen network
+  rt_hidden_size: 256      
+  rt_Dropout: 0.7  
+
+  cam_patch_dim: 8          # Vit Configurations
+  cam_patch_method: 1                       # 1,2,3
+  cam_conv_channels: 8      
+  cam_position_en_method: 1                 # 1,2
+
+  pc_conv_channels: 3       # PCtrs Configurations
+  pc_conv_blocks: 1                         ### problem when > 1
+  pc_pool_type: None                        # None, max, avg
+  pc_out_size: None                         # None or (M,N)
+  pc_cluster_window_size: 0.5               #2?
+  pc_nei_quer_radius: 200         # tp.ball_query
+  num_neighbor: 200
+  prev_grid_size: 0.04            # KPConv
+  sigma: 1.0
+
+
+  # training
+  batch_size: 10     # 60 batch size for training
+  mini_batches: 2 # 10
+  epochs: 5
+
+  optimizer: AdamW 
+  learning_rate: 5e-4  #0.006
+  momentum: 0.9
+  weight_decay: 0.01  #todo: 0.0001
+  sche_step_size: 20
+  sche_gamma: 0.1
+
+  num_recursive_iter: 1
+
+  save_writter_path: torchlogs/
+  # print_freq: 1
+  # save_freq: 1
+  # save_path: runs/s3dis_stratified_transformer
+
+TEST:
+  # test_list: dataset/s3dis/list/val5.txt
+  # test_list_full: dataset/s3dis/list/val5_full.txt
+  # split: val  # split in [train, val and test]
+  # test_gpu: [0]
+  # test_workers: 4
+  batch_size_test: 4
+  # model_path: # Fill the path of the trained .pth file model
+  # save_folder: # Fill the path to store the .npy files for each scene
+  # names_path: data/s3dis/s3dis_names.txt
