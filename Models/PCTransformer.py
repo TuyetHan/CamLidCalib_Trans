@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import torch_points_kernels as tp
 
-from Grid_Sampling import grid_sample
-from KPConvBlock import KPConvSimpleBlock
-from Encoder import EncoderBlock
+from .Grid_Sampling import grid_sample
+from .KPConvBlock import KPConvSimpleBlock
+from .Encoder import EncoderBlock
 
 class PC_Trs(nn.Module):
       def __init__(self, device, feat_dim,
@@ -106,7 +106,7 @@ class PC_Trs(nn.Module):
               embedding = layer(embedding, cluster_mask)
 
           # Perform pooling on output
-          if self.ouput_size is not None:
-            embedding = self.outpool(embedding)
+          # if self.ouput_size is not None:
+            # embedding = self.outpool(embedding)
 
           return embedding

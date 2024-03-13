@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from Encoder import EncoderBlock
-from PositionEncoding import PositionalEncoding, PositionalEncoding_Conv
+from Models.Encoder import EncoderBlock
+from Models.PositionEncoding import PositionalEncoding, PositionalEncoding_Conv
 
 class Cam_ViT(nn.Module):
     def __init__(self, device, img_depth, patch_method, position_en_method, patch_dim,
