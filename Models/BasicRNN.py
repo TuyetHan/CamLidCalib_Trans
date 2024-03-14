@@ -7,11 +7,10 @@ class BasicRNN(nn.Module):
 
         self.hidden_size = hidden_size
 
-        self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
+        self.i2h = nn.Linear(input_size , hidden_size)
         self.h2o = nn.Linear(hidden_size, output_size)
 
-    def forward(self, input, hidden):
-        combined = torch.cat((input, hidden), 1)
-        hidden = self.i2h(combined)
+    def forward(self, input):
+        hidden = self.i2h(input)
         output = self.h2o(hidden)
-        return output, hidden
+        return output

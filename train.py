@@ -48,13 +48,11 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
             transform, intrinsics = data['Transform'].to(device), data['intrinsics'].to(device)
 
             resT = torch.eye(4,4, device=device, requires_grad=True).repeat(All_batch_size, 1, 1)
-            hidden_rot = torch.zeros(All_batch_size, model.rt_hidden_size, dtype=torch.float, device=device)
-            hidden_tran = torch.zeros(All_batch_size, model.rt_hidden_size, dtype=torch.float, device=device)
 
             loss = 0
             for _ in range(num_recursive_iter):
                 new_depth = depth[:,:3,:].permute(0,2,1)
-                out, hidden_rot, hidden_tran = model(img, new_depth, feat, hidden_rot, hidden_tran)
+                out = model(img, new_depth, feat)
 
                 out = genTransformMat(out)
                 resT = torch.bmm(resT, out)

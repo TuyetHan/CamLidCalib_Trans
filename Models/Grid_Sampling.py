@@ -16,9 +16,10 @@ def grid_sample(pos, batch_ind, size, start):
     # Initilization
     batch_size = batch_ind.max().item() + 1
     n_point = pos.shape[0]//batch_size
-    all_cluster_mask = [torch.zeros(n_point, n_point).to(pos.device) for _ in range(batch_size)]
+    all_cluster_mask = [torch.zeros(n_point, n_point, dtype=bool).to(pos.device) for _ in range(batch_size)]
 
     # Clustering: Cluster is idx of each point in voxel
+    # TODO: review whether the need to flatten.
     cluster = voxel_grid(pos = pos, batch = batch_ind, size = size, start=start)
     unique_voxels, counts = cluster.unique(return_counts=True, sorted = False)
 
