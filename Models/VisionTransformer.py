@@ -70,11 +70,11 @@ class Cam_ViT(nn.Module):
           flatten_patches = nn.functional.unfold(x, (self.PatchDim, self.PatchDim), stride = self.PatchDim)
 
         elif self.patch_method == 2:
-          patches = self.PatchConv(torch.Tensor(x).to(self.device))
+          patches = self.PatchConv(torch.Tensor(x))
           flatten_patches = torch.flatten(patches, start_dim=2)
 
         elif self.patch_method == 3:
-          patches = self.PatchConv(torch.Tensor(x).to(self.device))
+          patches = self.PatchConv(torch.Tensor(x))
           flatten_patches = torch.flatten(patches, start_dim=2)
           # TODO: size off flatten patches very big. Pooling?
 

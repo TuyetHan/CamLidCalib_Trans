@@ -43,7 +43,7 @@ class PC_Trs(nn.Module):
           
           self.mlp_heads = mlp_heads
           self.KP_conv_channels = KP_conv_channels
-          self.ouput_size = ouput_size
+          self.pool_type = pool_type
 
           self.KPBlocks = nn.ModuleList([
               KPConvSimpleBlock(in_channels=feat_dim, out_channels=KP_conv_channels,
@@ -77,36 +77,36 @@ class PC_Trs(nn.Module):
           # Calculate Input Parameter
           batch_size = position.size(0)
           num_point  = position.size(1)
-          window = torch.tensor([self.cluster_window_size]*3).type_as(position).to(self.device)
+          window = torch.tensor([self.cluster_window_size]*3).type_as(position)
 
           # Change data location to GPU
-          position_flat = position.contiguous().view(-1, 3).to(self.device)
-          feature_flat  = feature.contiguous().view(-1, self.feat_dim).to(self.device)
+          position_flat = position.contiguous().view(-1, 3)
+          feature  = feature.view(-1, self.feat_dim)
 
           # Batch_idx and Neighbor idx for Clustering and Convolution
           batch_idx = torch.cat([torch.tensor([ii]*o) for ii, o in enumerate([num_point]*batch_size)], 0).long().view(-1, 1).to(self.device)
           neighbor_idx = tp.ball_query(radius = self.radius, nsample = self.num_neighbor,
                                         x = position_flat, y = position_flat,
                                         mode="partial_dense",
-                                        batch_x=batch_idx.squeeze(), batch_y=batch_idx.squeeze())[0].to(self.device)
+                                        batch_x=batch_idx.squeeze(), batch_y=batch_idx.squeeze())[0]
 
           # KPConv Layer
           for i, layer in enumerate(self.KPBlocks):
-              kpfeature = layer(feature_flat, position_flat, batch = batch_idx, neighbor_idx = neighbor_idx)
-          kpfeature = kpfeature.contiguous().view(batch_size, -1, (self.KP_conv_channels))
+              kpfeature = layer(feature, position_flat, batch = batch_idx, neighbor_idx = neighbor_idx)
+          kpfeature = kpfeature.view(batch_size, -1, (self.KP_conv_channels))
 
           # Partition pointcloud to non-overlapping window - return a mask of size (Batch, n_point, n_point)
           cluster_mask = grid_sample(position_flat, batch_idx, window, start=None)
           cluster_mask = torch.repeat_interleave(cluster_mask, self.mlp_heads, dim = 0)
 
           # Linear Projection and Multihead Attention
-          point_wfeature = torch.cat((position.to(self.device), kpfeature), dim=2)
+          point_wfeature = torch.cat((position, kpfeature), dim=2)
           embedding = torch.matmul(point_wfeature.float(), self.weightmatrix)
           for layer in (self.EncBlocks):
               embedding = layer(embedding, cluster_mask)
 
           # Perform pooling on output
-          # if self.ouput_size is not None:
-            # embedding = self.outpool(embedding)
+          if self.pool_type is not None:
+              embedding = self.outpool(embedding)
 
           return embedding

@@ -76,7 +76,7 @@ class KITTIData(Dataset):
         points = np.fromfile(pcdPath, dtype=np.float32).reshape((-1, 4))[:,:3]
         ones_col = np.ones(shape=(points.shape[0],1))
         points = np.hstack((points,ones_col))
-        points = points[points[:, 0] > 0]
+        # points = points[points[:, 0] > 0]
 
         omega_x = self.angle_limit*np.random.random_sample() - (self.angle_limit/2.0) + self.eps
         omega_y = self.angle_limit*np.random.random_sample() - (self.angle_limit/2.0) + self.eps

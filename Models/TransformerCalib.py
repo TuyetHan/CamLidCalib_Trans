@@ -78,7 +78,7 @@ class TransformerCalib(nn.Module):
         self.rotrnn = BasicRNN(self.rt_channels, args.rt_hidden_size, 3)
         self.tranrnn = BasicRNN(self.rt_channels, args.rt_hidden_size, 3)
 
-    def forward(self, image, position, feature, hidden_rot, hidden_tran):
+    def forward(self, image, position, feature):
         """
         Args:
           image of shape (batch_size, img height, img width, img_depth): Camera Image
@@ -102,7 +102,7 @@ class TransformerCalib(nn.Module):
         tran_features = self.avgpoolTran(self.dropout(self.relu(self.bnTran(self.convTran(all_feat)))))
         tran_features = tran_features.flatten(1)
 
-        outRot, hidden_rot = self.rotrnn(rot_features, hidden_rot)
-        outTran, hidden_tran = self.tranrnn(tran_features, hidden_tran)
+        outRot = self.rotrnn(rot_features)
+        outTran = self.tranrnn(tran_features)
 
-        return torch.concat([outTran, outRot], dim=1), hidden_rot, hidden_tran
+        return torch.concat([outTran, outRot], dim=1)
