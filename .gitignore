@@ -1,0 +1,6 @@
+data/
+torchlogs/
+**/__pycache__/
+trained_model/
+expected_pcd.pcd
+predicted_pcd.pcd
