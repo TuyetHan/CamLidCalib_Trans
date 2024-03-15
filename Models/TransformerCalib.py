@@ -39,7 +39,7 @@ class TransformerCalib(nn.Module):
         super(TransformerCalib, self).__init__()
         self.rt_hidden_size = args.rt_hidden_size
         self.rt_channels = args.rt_channels
-        self.feature = args.mlp_feature
+        self.mlp_feature = args.mlp_feature
 
         # Camera Feature Extract
         self.CameraTrans = Cam_ViT(device = device, img_depth = args.img_depth,
@@ -92,8 +92,9 @@ class TransformerCalib(nn.Module):
         """
         # Feature Extract
         img_feat = self.CameraTrans(image)
-        lidar_feat = self.PCloudTrans(position, feature)
-        all_feat = torch.cat((img_feat, lidar_feat), dim = 1).reshape(position.size(0), 1, -1, self.feature)
+        # To save memory, PCloudTrans func will modify feature. If need use feature again, please copy it.
+        lidar_feat = self.PCloudTrans(position, feature)  
+        all_feat = torch.cat((img_feat, lidar_feat), dim = 1).reshape(position.size(0), 1, -1, self.mlp_feature)
 
         # Estimate Rotation and Translation
         # Q: Should I replace by Attention k = lidar, q,v = img? or concate?
