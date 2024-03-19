@@ -1,6 +1,6 @@
 DATA:
   data_name: kitti
-  # data_root: /home/p_trant/DataSets/KITTI
+  # data_root: Dataset/
   data_root: data/Kitti
 
 TRAIN:
@@ -9,7 +9,7 @@ TRAIN:
   img_depth: 3              # Fixed parameter. Avoid modify
   pc_feat_dim: 1
   num_points: 62464
-  resized_img: [187, 621]
+  resized_img: 
 
 
   mlp_blocks: 3             # For Attention in both Vit and PCtrs
@@ -29,8 +29,8 @@ TRAIN:
 
   pc_conv_channels: 3       # PCtrs Configurations
   pc_conv_blocks: 1                         ### problem when > 1
-  pc_pool_type: None                        # None, max, avg
-  pc_out_size: None                         # None or (M,N)
+  pc_pool_type: null                        # None, max, avg
+  pc_out_size: null                         # None or (M,N)
   pc_cluster_window_size: 0.5               #2?
   pc_nei_quer_radius: 200         # tp.ball_query
   num_neighbor: 200
@@ -58,12 +58,4 @@ TRAIN:
   # save_path: runs/s3dis_stratified_transformer
 
 TEST:
-  # test_list: dataset/s3dis/list/val5.txt
-  # test_list_full: dataset/s3dis/list/val5_full.txt
-  # split: val  # split in [train, val and test]
-  # test_gpu: [0]
-  # test_workers: 4
   batch_size_test: 4
-  # model_path: # Fill the path of the trained .pth file model
-  # save_folder: # Fill the path to store the .npy files for each scene
-  # names_path: data/s3dis/s3dis_names.txt
