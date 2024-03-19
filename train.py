@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 def get_parser():
     parser = argparse.ArgumentParser(description='Camera Lidar Calibration using Transformer Network')
-    parser.add_argument('--config', type=str, default='config/Trans_Calib_1st.yaml', help='config file')
+    parser.add_argument('--config', type=str, default='CamLidCalib_Trans/config/Trans_Calib_1st.yaml', help='config file')
     parser.add_argument('opts', help='see config/Trans_Calib_1st.yaml for all options', default=None, nargs=argparse.REMAINDER)
     args = parser.parse_args()
     assert args.config is not None
@@ -109,7 +109,7 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
 
 if __name__ == '__main__':
     args = get_parser()
-    
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'  
     num_gpus = torch.cuda.device_count()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -117,11 +117,10 @@ if __name__ == '__main__':
     model.to(device=device)
     
     # Consider latter...
-    # model = torch.nn.parallel.DataParallel(model, device_ids=list(range(num_gpus)), dim=0)
-    # model.module.concatNet.resnet18_FeaturesExtractor.requires_grad_(requires_grad=False) #Freeze RGB weights
+    model = torch.nn.parallel.DataParallel(model, device_ids=list(range(num_gpus)), dim=0)
 
-    dataSet = PreKittiData(root_dir=args.data_root)
-    valid_loader = DataLoader(dataSet.getData(valid=False), batch_size=args.batch_size, drop_last=True, num_workers=os.cpu_count())
+    dataSet = PreKittiData(root_dir=args.data_root, args=args)
+    valid_loader = DataLoader(dataSet.getData(valid=False), batch_size=args.batch_size, drop_last=True, num_workers=os.cpu_count()//2)
     
     optimizer = torch.optim.Adam(model.parameters(), lr=float(args.learning_rate))
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.sche_step_size, gamma=args.sche_gamma)
@@ -130,4 +129,5 @@ if __name__ == '__main__':
     train(model=model, train_loader=valid_loader, device=device, optimizer=optimizer,
           writer=writer, scheduler=scheduler, args=args)
     # print('Success')
+
     writer.close()
