@@ -129,4 +129,5 @@ if __name__ == '__main__':
     train(model=model, train_loader=valid_loader, device=device, optimizer=optimizer,
           writer=writer, scheduler=scheduler, args=args)
     # print('Success')
+
     writer.close()
