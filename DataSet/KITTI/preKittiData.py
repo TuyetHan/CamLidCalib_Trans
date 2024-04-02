@@ -6,9 +6,10 @@ from .KittiData import KITTIData
 
 
 class PreKittiData():
-    def __init__(self, root_dir:str = None):
+    def __init__(self, root_dir:str = None, args = None):
         assert root_dir != None, "You need to specify the dataset path"
         self.root_dir = root_dir
+        self.args = args
 
     def getSamples(self, valide = 'test'):
         dPath = os.path.join(self.root_dir, valide)
@@ -49,4 +50,5 @@ class PreKittiData():
             files *= 4
             random.shuffle(files)
             
-        return KITTIData(files)
+        return KITTIData(files, feat_dim = self.args.pc_feat_dim, 
+                         num_point = self.args.num_points, img_reshape = self.args.resized_img)
