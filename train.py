@@ -1,15 +1,21 @@
 import os
-from config import config
 import argparse
+import functools
+from config import config
 from config.utils import *
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from DataSet.KITTI.preKittiData import PreKittiData
-from Models.TransformerCalib import TransformerCalib
 
+from Models.Encoder import EncoderBlock
+from Models.TransformerCalib import TransformerCalib
 from torch.utils.tensorboard import SummaryWriter
+
+from accelerate import Accelerator, FullyShardedDataParallelPlugin
+from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy, size_based_auto_wrap_policy
+from torch.distributed.fsdp.fully_sharded_data_parallel import BackwardPrefetch, MixedPrecision, ShardingStrategy, StateDictType
 
 def get_parser():
     parser = argparse.ArgumentParser(description='Camera Lidar Calibration using Transformer Network')
@@ -27,8 +33,8 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
           scheduler:torch.optim.lr_scheduler.StepLR=None, minLoss=torch.inf, args:argparse.Namespace=None):
     
     total_data_loaded = len(train_loader)
-    mini_batches = args.mini_batches
-    All_batch_size = train_loader.batch_size
+    print_freq = args.print_log_freq
+    All_batch_size = args.batch_size
 
     correspondance_point_loss = nn.MSELoss(reduction='none')
     num_recursive_iter = args.num_recursive_iter
@@ -37,13 +43,17 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
     model.train()
 
     for epoch in range(0, epochs):
-        print(f'Training epoch {epoch + 1}')
+        if args.multi_gpu_tr == True:
+            print('Node', accelerator.process_index , f'Training epoch {epoch + 1}')
+        else:
+            print(f'Training epoch {epoch + 1}')
 
         running_loss = 0.0
         genData = None
         epochLosses = 0.0
         for i, data in enumerate(train_loader, 0):
             optimizer.zero_grad()
+            #todo: We could avoid this line since we set the accelerator with `device_placement=True`.
             img, depth, feat = data['Image'].to(device), data['Depth'].to(device), data['Feature'].to(device)
             transform, intrinsics = data['Transform'].to(device), data['intrinsics'].to(device)
 
@@ -60,19 +70,22 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
                 loss_pointcloud_mse = torch.sqrt(correspondance_point_loss(genData['pcd']['pred'], genData['pcd']['exp']).sum(-1)).sum(-1).mean()
 
                 loss += (loss_pointcloud_mse)
-                 
-            loss.backward()
+
+            if args.multi_gpu_tr == True:
+                accelerator.backward(loss)
+            else:
+                loss.backward()
             optimizer.step()
 
             running_loss += (loss.item() / num_recursive_iter)
             epochLosses += (loss.item() / num_recursive_iter)
-            if i % mini_batches == 9:    # print every 10 mini-batches
+            if i % print_freq == 0:    # print every 10 sample
                 pred_tran = resT[:, :3, 3].detach().cpu()
                 exp_trans = -transform[:, :3, 3].detach().cpu()
                 pred_rot = resT[:, :3, :3].detach().cpu()
                 exp_rot = transform[:, :3, :3].permute(0, 2, 1).detach().cpu()
 
-                running_loss /= mini_batches
+                running_loss /= print_freq
                 geodesic_dist = rotationLoss(pred_rot, exp_rot)
                 X_diff, Y_diff, Z_diff = translaitionLoss(pred_tran, exp_trans)
                 Yaw_diff, Pitch_diff, Roll_diff = anglesLoss(pred_rot, exp_rot)
@@ -107,17 +120,39 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
             }, os.path.join('./result/trained_model', "save_"+str(epoch)+".pth"))
         
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = get_parser()
-    # os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
-    num_gpus = torch.cuda.device_count()
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = TransformerCalib(device=device, args=args)
-    model.to(device=device)
-    
-    # Consider latter...
-    # model = torch.nn.parallel.DataParallel(model, device_ids=list(range(num_gpus)), dim=0)
+    if args.multi_gpu_tr == True:
+        transformer_auto_wrapper_policy = functools.partial(
+            transformer_auto_wrap_policy,
+            transformer_layer_cls={
+                EncoderBlock,
+            },
+        )
+        fsdp_plugin = FullyShardedDataParallelPlugin(
+            auto_wrap_policy = transformer_auto_wrapper_policy,
+            sharding_strategy = ShardingStrategy.FULL_SHARD,
+            mixed_precision_policy = MixedPrecision(reduce_dtype =torch.float16),
+        )
+
+        # Initialize accelerator
+        accelerator = Accelerator(fsdp_plugin=fsdp_plugin)
+        print('Check plugin: ', accelerator.state.fsdp_plugin)
+        model = TransformerCalib(device=accelerator.device, args=args)
+        device = accelerator.device
+        # model = accelerator.prepare_model(model)
+
+    else:
+        num_gpus = torch.cuda.device_count()
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        model = TransformerCalib(device=device, args=args)
+        model.to(device=device)
+
+        if args.data_parallel == True:
+            model = torch.nn.parallel.DataParallel(
+                model, device_ids=list(range(num_gpus)), dim=0)
 
     dataSet = PreKittiData(root_dir=args.data_root, args=args)
     valid_loader = DataLoader(dataSet.getData(valid=False), batch_size=args.batch_size, drop_last=True, num_workers=os.cpu_count()//2)
@@ -126,9 +161,16 @@ if __name__ == '__main__':
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.sche_step_size, gamma=args.sche_gamma)
     writer = SummaryWriter(args.save_writter_path)
 
-    train(model=model, train_loader=valid_loader, device=device, optimizer=optimizer,
-          writer=writer, scheduler=scheduler, args=args)
-    
-    print('Success')
+    if args.multi_gpu_tr == True:
+        model, optimizer, valid_loader, scheduler = accelerator.prepare(model, optimizer, valid_loader, scheduler)
+        print('Node', accelerator.process_index , 'Start trainning...')
+    else:
+        print('Start trainning...')
+
+    train(model=model, train_loader=valid_loader, device=device, 
+        optimizer=optimizer, writer=writer, scheduler=scheduler, args=args)
+
+    if args.multi_gpu_tr == True: print('Node', accelerator.process_index , 'Success')
+    else: print('Success')
 
     writer.close()
