@@ -1,0 +1,26 @@
+compute_environment: LOCAL_MACHINE
+debug: true
+distributed_type: FSDP    # MULTI_GPU
+downcast_bf16: 'no'
+fsdp_config:
+  fsdp_use_orig_params: true
+  fsdp_offload_params: true
+  fsdp_sync_module_states: true
+  fsdp_cpu_ram_efficient_loading: true
+#   fsdp_backward_prefetch: BACKWARD_POST
+#   fsdp_forward_prefetch: false
+main_training_function: main
+num_processes: 2      #Dump Value - Config in LAUCHER RUN
+same_network: false
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false
+
+# mixed_precision: 'no'       #Config in training
+# machine_rank:               #Config in LAUCHER RUN
+# main_process_ip:            #Config in LAUCHER RUN
+# main_process_port:          #Config in LAUCHER RUN
+# num_machines:               #Config in LAUCHER RUN
+# rdzv_backend: c10d          #Config in LAUCHER RUN
+

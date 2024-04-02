@@ -87,8 +87,8 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
                     writer.add_scalar('Loss_Pitch/Train', Pitch_diff, i + epoch * total_data_loaded)
                     writer.add_scalar('Loss_Roll/Train', Roll_diff, i + epoch * total_data_loaded)
 
-                save_pcd('./predicted_pcd.pcd', genData['pcd']['pred'][0].detach().cpu().numpy())
-                save_pcd('./expected_pcd.pcd', genData['pcd']['exp'][0].detach().cpu().numpy())
+                save_pcd('./result/predicted_pcd.pcd', genData['pcd']['pred'][0].detach().cpu().numpy())
+                save_pcd('./result/expected_pcd.pcd', genData['pcd']['exp'][0].detach().cpu().numpy())
 
                 print(f'[Epoch: {epoch + 1}, Batch: {i + 1} / {total_data_loaded}], Total loss {running_loss}')
                 running_loss = 0.0
@@ -104,12 +104,12 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
                 'minLoss': minLoss,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict()
-            }, os.path.join('./trained_model', "save_"+str(epoch)+".pth"))
+            }, os.path.join('./result/trained_model', "save_"+str(epoch)+".pth"))
         
 
 if __name__ == '__main__':
     args = get_parser()
-    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'  
+    # os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
     num_gpus = torch.cuda.device_count()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     model.to(device=device)
     
     # Consider latter...
-    model = torch.nn.parallel.DataParallel(model, device_ids=list(range(num_gpus)), dim=0)
+    # model = torch.nn.parallel.DataParallel(model, device_ids=list(range(num_gpus)), dim=0)
 
     dataSet = PreKittiData(root_dir=args.data_root, args=args)
     valid_loader = DataLoader(dataSet.getData(valid=False), batch_size=args.batch_size, drop_last=True, num_workers=os.cpu_count()//2)
@@ -128,6 +128,7 @@ if __name__ == '__main__':
 
     train(model=model, train_loader=valid_loader, device=device, optimizer=optimizer,
           writer=writer, scheduler=scheduler, args=args)
-    # print('Success')
+    
+    print('Success')
 
     writer.close()
