@@ -42,20 +42,20 @@ TRAIN:
   batch_size: 10     # 60 batch size for training
   mini_batches: 2 # 10
   epochs: 5
-
   optimizer: AdamW 
   learning_rate: 5e-4  #0.006
   momentum: 0.9
   weight_decay: 0.01  #todo: 0.0001
   sche_step_size: 20
   sche_gamma: 0.1
-
   num_recursive_iter: 1
 
-  save_writter_path: torchlogs/
-  # print_freq: 1
-  # save_freq: 1
+  save_writter_path: result/torchlogs/
+  print_log_freq: 5
   # save_path: runs/s3dis_stratified_transformer
+  multi_gpu_tr:  false  # true
+  data_parallel: false  # w/o multi_gpu_tr,need one node only.
+  with_tracking: true
 
 TEST:
   batch_size_test: 4
