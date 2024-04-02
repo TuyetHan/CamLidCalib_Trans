@@ -16,7 +16,7 @@ def genNormPointcloud(SampledPointcloudGrid):
     norm_maxes, _ = norms.max(axis=1)
     norm_maxes = norm_maxes[..., None, None]
     point_cloud = point_cloud / norm_maxes
-    point_limit = 8192
+    point_limit = 128
     no_points = point_cloud.shape[1]
     no_partitions = no_points//point_limit
     indices = torch.arange(0, no_partitions*point_limit, dtype=torch.long, device=point_cloud.device)
