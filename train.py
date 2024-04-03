@@ -1,4 +1,5 @@
 import os
+import glob
 import argparse
 import functools
 from config import config
@@ -14,8 +15,18 @@ from Models.TransformerCalib import TransformerCalib
 from torch.utils.tensorboard import SummaryWriter
 
 from accelerate import Accelerator, FullyShardedDataParallelPlugin
+from accelerate.utils import ProjectConfiguration
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy, size_based_auto_wrap_policy
-from torch.distributed.fsdp.fully_sharded_data_parallel import BackwardPrefetch, MixedPrecision, ShardingStrategy, StateDictType
+from torch.distributed.fsdp.fully_sharded_data_parallel import (
+    BackwardPrefetch, 
+    MixedPrecision, 
+    ShardingStrategy, 
+    StateDictType,
+    FullOptimStateDictConfig, 
+    FullStateDictConfig,
+    ShardedStateDictConfig,
+    ShardedOptimStateDictConfig,
+)
 
 def get_parser():
     parser = argparse.ArgumentParser(description='Camera Lidar Calibration using Transformer Network')
@@ -41,7 +52,16 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
     epochs = args.epochs
 
     model.train()
-
+    if args.multi_gpu_tr == True:
+        if (args.resume_from_checkpoint==True):
+            accelerator.load_state(args.save_ckp_path)
+        else:
+            # Empty save folder
+            files = glob.glob(args.save_ckp_path)
+            for f in files: os.remove(f)
+            # Save the init state
+            accelerator.save_state(args.save_ckp_path)
+    
     for epoch in range(0, epochs):
         if args.multi_gpu_tr == True:
             print('Node', accelerator.process_index , f'Training epoch {epoch + 1}')
@@ -107,7 +127,7 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
                 running_loss = 0.0
 
         scheduler.step()
-
+        if epoch % args.save_ckp_freq == 0: accelerator.save_state(args.save_ckp_path)
         epochLosses /= (i+1)
         if save and minLoss > epochLosses:
             minLoss = epochLosses
@@ -131,14 +151,20 @@ if __name__ == "__main__":
             },
         )
         fsdp_plugin = FullyShardedDataParallelPlugin(
+            # state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
+            # optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
+            state_dict_config = ShardedStateDictConfig(offload_to_cpu=True),
+            optim_state_dict_config = ShardedOptimStateDictConfig(offload_to_cpu=True),
             auto_wrap_policy = transformer_auto_wrapper_policy,
             sharding_strategy = ShardingStrategy.FULL_SHARD,
             mixed_precision_policy = MixedPrecision(reduce_dtype =torch.float16),
         )
 
         # Initialize accelerator
-        accelerator = Accelerator(fsdp_plugin=fsdp_plugin)
+        project_config = ProjectConfiguration(project_dir=args.prj_dir, automatic_checkpoint_naming=True)
+        accelerator = Accelerator(fsdp_plugin=fsdp_plugin, project_config=project_config)
         print('Check plugin: ', accelerator.state.fsdp_plugin)
+        
         model = TransformerCalib(device=accelerator.device, args=args)
         device = accelerator.device
         # model = accelerator.prepare_model(model)

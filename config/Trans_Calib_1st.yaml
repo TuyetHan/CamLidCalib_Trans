@@ -37,7 +37,6 @@ TRAIN:
   prev_grid_size: 0.04            # KPConv
   sigma: 1.0
 
-
   # training
   batch_size: 10     # 60 batch size for training
   mini_batches: 2 # 10
@@ -51,11 +50,14 @@ TRAIN:
   num_recursive_iter: 1
 
   save_writter_path: result/torchlogs/
-  print_log_freq: 5
-  # save_path: runs/s3dis_stratified_transformer
-  multi_gpu_tr:  false  # true
+  print_log_freq: 20
+  multi_gpu_tr:  true  
+  save_ckp_path: result/checkpoints/
+  save_ckp_freq: 5
+  prj_dir: /project/p_trancal/result
+  resume_from_checkpoint: false
   data_parallel: false  # w/o multi_gpu_tr,need one node only.
-  with_tracking: true
+  gpu_tracking: true
 
 TEST:
   batch_size_test: 4
