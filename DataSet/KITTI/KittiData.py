@@ -28,8 +28,7 @@ class KITTIData(Dataset):
     def __preprocfeat__(self, pcdPath):
         # return self.feat_dim last collumn of point cloud
         feature = np.fromfile(pcdPath, dtype=np.float32).reshape((-1, 4))[:,-self.feat_dim:]
-        feature = np.array(random.choices(feature, cum_weights=None,
-                                              weights=np.ones(shape=(feature.shape[0], 1)), k=self.num_point))
+        feature = feature[np.random.choice(feature.shape[0], self.num_point, replace=False), :]
         return torch.tensor(feature, dtype=torch.float32).squeeze()
 
     def getVelo2CamTransform(self, calibVelo2CamPath):
@@ -102,8 +101,7 @@ class KITTIData(Dataset):
         transformed_points = np.matmul(random_transform, points_in_cam_axis)
 
         transformed_points = transformed_points.T
-        transformed_points = np.array(random.choices(transformed_points, cum_weights=None,
-                                                     weights=np.ones(shape=(transformed_points.shape[0], 1)), k=self.num_point))
+        transformed_points = transformed_points[np.random.choice(transformed_points.shape[0], self.num_point, replace=False), :]
         transformed_points = transformed_points.T
 
         return torch.tensor(transformed_points, dtype=torch.float32), torch.tensor(random_transform, dtype=torch.float32), \
