@@ -52,6 +52,7 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
     if args.logging_type is not None:
         hyper_paras = config.load_train_parameter(config_file)
         accelerator.init_trackers("Transformer_Calib", config=hyper_paras)
+
     
     for epoch in range(0, epochs):
         if args.multi_gpu_tr == True:
@@ -149,6 +150,7 @@ if __name__ == "__main__":
         # Initialize accelerator
         project_config = ProjectConfiguration(project_dir=args.prj_dir, automatic_checkpoint_naming=True)
         accelerator = Accelerator(fsdp_plugin=fsdp_plugin, project_config=project_config, log_with=args.logging_type)
+
         print('Check plugin: ', accelerator.state.fsdp_plugin)
         
         model = TransformerCalib(device=accelerator.device, args=args)
