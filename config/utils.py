@@ -11,18 +11,16 @@ def save_pcd(filename:str, points:np.ndarray):
                 o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points)))
 
 def genNormPointcloud(SampledPointcloudGrid):
-    point_cloud = SampledPointcloudGrid.permute((0, 2, 1))
-    norms = torch.linalg.norm(point_cloud, axis=2)
-    norm_maxes, _ = norms.max(axis=1)
-    norm_maxes = norm_maxes[..., None, None]
-    point_cloud = point_cloud / norm_maxes
-    point_limit = 128
-    no_points = point_cloud.shape[1]
-    no_partitions = no_points//point_limit
-    indices = torch.arange(0, no_partitions*point_limit, dtype=torch.long, device=point_cloud.device)
-    point_cloud = point_cloud.index_select(1, indices)
-    point_cloud = point_cloud.reshape([-1, point_limit, no_partitions, 3])
-    point_cloud = point_cloud.mean(dim=2)
+    point_cloud = SampledPointcloudGrid.permute((0, 2, 1))/80.0
+    
+    # Uncomment from here
+    # point_limit = 128
+    # no_points = point_cloud.shape[1]
+    # no_partitions = no_points//point_limit
+    # indices = torch.arange(0, no_partitions*point_limit, dtype=torch.long, device=point_cloud.device)
+    # point_cloud = point_cloud.index_select(1, indices)
+    # point_cloud = point_cloud.reshape([-1, point_limit, no_partitions, 3])
+    # point_cloud = point_cloud.mean(dim=2)
 
     return point_cloud
 

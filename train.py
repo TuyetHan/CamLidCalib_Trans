@@ -1,6 +1,6 @@
 import os
-import argparse
 import functools
+import argparse
 from config import config
 from config.utils import *
 
@@ -14,24 +14,25 @@ from Models.TransformerCalib import TransformerCalib
 from torch.utils.tensorboard import SummaryWriter
 
 from accelerate import Accelerator, FullyShardedDataParallelPlugin
+from accelerate.utils import ProjectConfiguration
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy, size_based_auto_wrap_policy
-from torch.distributed.fsdp.fully_sharded_data_parallel import BackwardPrefetch, MixedPrecision, ShardingStrategy, StateDictType
-
-def get_parser():
-    parser = argparse.ArgumentParser(description='Camera Lidar Calibration using Transformer Network')
-    parser.add_argument('--config', type=str, default='CamLidCalib_Trans/config/Trans_Calib_1st.yaml', help='config file')
-    parser.add_argument('opts', help='see config/Trans_Calib_1st.yaml for all options', default=None, nargs=argparse.REMAINDER)
-    args = parser.parse_args()
-    assert args.config is not None
-    cfg = config.load_cfg_from_cfg_file(args.config)
-    if args.opts is not None:
-        cfg = config.merge_cfg_from_list(cfg, args.opts)
-    return cfg
+from torch.distributed.fsdp.fully_sharded_data_parallel import (
+    BackwardPrefetch, 
+    MixedPrecision, 
+    ShardingStrategy, 
+    StateDictType,
+    FullOptimStateDictConfig, 
+    FullStateDictConfig,
+    ShardedStateDictConfig,
+    ShardedOptimStateDictConfig,
+)
+config_file = 'CamLidCalib_Trans/config/Trans_Calib_1st.yaml'
 
 def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda', 
           save:bool=True, writer:SummaryWriter=None, epochs:int=100, optimizer:torch.optim.Adam=None, 
           scheduler:torch.optim.lr_scheduler.StepLR=None, minLoss=torch.inf, args:argparse.Namespace=None):
     
+    # Initialize constant data
     total_data_loaded = len(train_loader)
     print_freq = args.print_log_freq
     All_batch_size = args.batch_size
@@ -41,7 +42,17 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
     epochs = args.epochs
 
     model.train()
+    if args.multi_gpu_tr == True:
+        if (args.resume_from_checkpoint==True):
+            accelerator.load_state(args.save_ckp_path)
+        else:
+            # Save the init state
+            accelerator.save_state(args.save_ckp_path)
 
+    if args.logging_type is not None:
+        hyper_paras = config.load_train_parameter(config_file)
+        accelerator.init_trackers("Transformer_Calib", config=hyper_paras)
+    
     for epoch in range(0, epochs):
         if args.multi_gpu_tr == True:
             print('Node', accelerator.process_index , f'Training epoch {epoch + 1}')
@@ -79,7 +90,7 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
 
             running_loss += (loss.item() / num_recursive_iter)
             epochLosses += (loss.item() / num_recursive_iter)
-            if i % print_freq == 0:    # print every 10 sample
+            if i % print_freq == 0:    
                 pred_tran = resT[:, :3, 3].detach().cpu()
                 exp_trans = -transform[:, :3, 3].detach().cpu()
                 pred_rot = resT[:, :3, :3].detach().cpu()
@@ -90,38 +101,33 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
                 X_diff, Y_diff, Z_diff = translaitionLoss(pred_tran, exp_trans)
                 Yaw_diff, Pitch_diff, Roll_diff = anglesLoss(pred_rot, exp_rot)
 
-                if writer:
-                    writer.add_scalar('Loss/Train', running_loss, i + epoch * total_data_loaded)
-                    writer.add_scalar('Loss_Geodesic/Train', geodesic_dist, i + epoch * total_data_loaded)
-                    writer.add_scalar('Loss_X/Train', X_diff, i + epoch * total_data_loaded)
-                    writer.add_scalar('Loss_Y/Train', Y_diff, i + epoch * total_data_loaded)
-                    writer.add_scalar('Loss_Z/Train', Z_diff, i + epoch * total_data_loaded)
-                    writer.add_scalar('Loss_Yaw/Train', Yaw_diff, i + epoch * total_data_loaded)
-                    writer.add_scalar('Loss_Pitch/Train', Pitch_diff, i + epoch * total_data_loaded)
-                    writer.add_scalar('Loss_Roll/Train', Roll_diff, i + epoch * total_data_loaded)
+                if args.logging_type is not None:
+                    accelerator.log({"train_loss": running_loss, 
+                                    "train_geodesic_loss": geodesic_dist,
+                                    "train_X_loss":X_diff, 
+                                    "train_Y_loss":Y_diff, 
+                                    "train_Z_loss":Z_diff,
+                                    "train_Yaw_loss":Yaw_diff,
+                                    "train_Pitch_loss":Pitch_diff, 
+                                    "train_Roll_loss":Roll_diff,
+                                    }, step=i + epoch * total_data_loaded)
 
                 save_pcd('./result/predicted_pcd.pcd', genData['pcd']['pred'][0].detach().cpu().numpy())
-                save_pcd('./result/expected_pcd.pcd', genData['pcd']['exp'][0].detach().cpu().numpy())
+                save_pcd('./result/expected_pcd.pcd' , genData['pcd']['exp'][0].detach().cpu().numpy())
 
                 print(f'[Epoch: {epoch + 1}, Batch: {i + 1} / {total_data_loaded}], Total loss {running_loss}')
                 running_loss = 0.0
 
-        scheduler.step()
+            if i == 15: break #for debug
 
-        epochLosses /= (i+1)
-        if save and minLoss > epochLosses:
-            minLoss = epochLosses
-            print(f"saving model with mean Loss {minLoss}")
-            torch.save({
-                'epoch' : epoch,
-                'minLoss': minLoss,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict()
-            }, os.path.join('./result/trained_model', "save_"+str(epoch)+".pth"))
-        
+        scheduler.step()
+        if epoch % args.save_ckp_freq == 0: accelerator.save_state(args.save_ckp_path) 
+
+    if args.savelog == True:
+        accelerator.end_training()
 
 if __name__ == "__main__":
-    args = get_parser()
+    args = config.get_parser(config_file)
 
     if args.multi_gpu_tr == True:
         transformer_auto_wrapper_policy = functools.partial(
@@ -131,14 +137,20 @@ if __name__ == "__main__":
             },
         )
         fsdp_plugin = FullyShardedDataParallelPlugin(
+            # state_dict_config=FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
+            # optim_state_dict_config=FullOptimStateDictConfig(offload_to_cpu=True, rank0_only=True),
+            state_dict_config = ShardedStateDictConfig(offload_to_cpu=True),
+            optim_state_dict_config = ShardedOptimStateDictConfig(offload_to_cpu=True),
             auto_wrap_policy = transformer_auto_wrapper_policy,
             sharding_strategy = ShardingStrategy.FULL_SHARD,
             mixed_precision_policy = MixedPrecision(reduce_dtype =torch.float16),
         )
 
         # Initialize accelerator
-        accelerator = Accelerator(fsdp_plugin=fsdp_plugin)
+        project_config = ProjectConfiguration(project_dir=args.prj_dir, automatic_checkpoint_naming=True)
+        accelerator = Accelerator(fsdp_plugin=fsdp_plugin, project_config=project_config, log_with=args.logging_type)
         print('Check plugin: ', accelerator.state.fsdp_plugin)
+        
         model = TransformerCalib(device=accelerator.device, args=args)
         device = accelerator.device
         # model = accelerator.prepare_model(model)
@@ -163,6 +175,8 @@ if __name__ == "__main__":
 
     if args.multi_gpu_tr == True:
         model, optimizer, valid_loader, scheduler = accelerator.prepare(model, optimizer, valid_loader, scheduler)
+        config.result_dir_preparation(args, accelerator.process_index)
+        accelerator.wait_for_everyone()
         print('Node', accelerator.process_index , 'Start trainning...')
     else:
         print('Start trainning...')

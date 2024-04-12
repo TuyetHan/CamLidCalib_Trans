@@ -5,7 +5,9 @@ import yaml
 import os
 from ast import literal_eval
 import copy
-
+import glob
+import argparse
+import shutil
 
 class CfgNode(dict):
     """
@@ -71,6 +73,16 @@ def load_cfg_from_cfg_file(file):
 
     cfg = CfgNode(cfg)
     return cfg
+
+
+def load_train_parameter(file):
+    assert os.path.isfile(file) and file.endswith('.yaml'), \
+    '{} is not a yaml file'.format(file)
+
+    with open(file, 'r') as f:
+        data = yaml.safe_load(f)
+    
+    return data.get('TRAIN', {})
 
 
 def merge_cfg_from_list(cfg, cfg_list):
@@ -163,3 +175,26 @@ def _assert_with_logging(cond, msg):
     if not cond:
         logger.debug(msg)
     assert cond, msg
+
+def result_dir_preparation(args, global_rank):
+    # Only perfore preparation one time by node 0.
+    if global_rank == 0:
+        print("Directory Preparation")
+        # Checkpoint folder preparation
+        if (args.multi_gpu_tr == True) and (args.resume_from_checkpoint==False):
+            print("Prepare ckp save folder:", args.save_ckp_path)
+            if os.path.exists(args.save_ckp_path):
+                print("Exit old ckp folder: Delete...")
+                shutil.rmtree(args.save_ckp_path)
+            os.makedirs(args.save_ckp_path, exist_ok=True)
+
+def get_parser(config_file):
+    parser = argparse.ArgumentParser(description='Camera Lidar Calibration using Transformer Network')
+    parser.add_argument('--config', type=str, default=config_file, help='config file')
+    parser.add_argument('opts', help='see config/Trans_Calib_1st.yaml for all options', default=None, nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    assert args.config is not None
+    cfg = load_cfg_from_cfg_file(args.config)
+    if args.opts is not None:
+        cfg = merge_cfg_from_list(cfg, args.opts)
+    return cfg
