@@ -7,7 +7,8 @@ fsdp_config:
   fsdp_offload_params: true
   fsdp_sync_module_states: true
   fsdp_cpu_ram_efficient_loading: true
-#   fsdp_backward_prefetch: BACKWARD_POST
+  fsdp_backward_prefetch: BACKWARD_POST
+  fsdp_state_dict_type: SHARDED_STATE_DICT
 #   fsdp_forward_prefetch: false
 main_training_function: main
 num_processes: 2      #Dump Value - Config in LAUCHER RUN
