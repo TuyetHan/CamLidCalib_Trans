@@ -43,11 +43,12 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
 
     model.train()
     if args.multi_gpu_tr == True:
-        if (args.resume_from_checkpoint==True):
-            accelerator.load_state(args.save_ckp_path)
+        if (args.resume_from_checkpoint is not None):
+            accelerator.load_state()
+            accelerator.project_configuration.iteration = args.resume_from_checkpoint
         else:
             # Save the init state
-            accelerator.save_state(args.save_ckp_path)
+            accelerator.save_state()
 
     if args.logging_type is not None:
         hyper_paras = config.load_train_parameter(config_file)
@@ -118,12 +119,10 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
                 print(f'[Epoch: {epoch + 1}, Batch: {i + 1} / {total_data_loaded}], Total loss {running_loss}')
                 running_loss = 0.0
 
-            if i == 15: break #for debug
-
         scheduler.step()
-        if epoch % args.save_ckp_freq == 0: accelerator.save_state(args.save_ckp_path) 
+        if epoch % args.save_ckp_freq == 0: accelerator.save_state() 
 
-    if args.savelog == True:
+    if args.logging_type is not None :
         accelerator.end_training()
 
 if __name__ == "__main__":
