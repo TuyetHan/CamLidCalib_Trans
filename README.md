@@ -15,11 +15,11 @@ config: Contains files for read .YAML,... task related to configuration.
 
 Current required library:
  - Numpy, torch
-# pip install torchnet pytorch_metric_learning
-# pip install wheel
-# pip install torch-scatter torch-cluster torch-sparse torch_geometric torchmetrics
-# pip install omegaconf wandb plyfile hydra-core h5py pandas gdown
-# pip install --no-deps torch-points-kernels
-# pip install --no-deps torch-points3d
-# pip install accelerate
-# pip install matplotlib numba open3d tensorboard scikit-image
+pip install torchnet pytorch_metric_learning
+pip install wheel
+pip install torch-scatter torch-cluster torch-sparse torch_geometric torchmetrics
+pip install omegaconf wandb plyfile hydra-core h5py pandas gdown
+pip install --no-deps torch-points-kernels
+pip install --no-deps torch-points3d
+pip install accelerate
+pip install matplotlib numba open3d tensorboard scikit-image
