@@ -179,14 +179,10 @@ def _assert_with_logging(cond, msg):
 def result_dir_preparation(args, global_rank):
     # Only perfore preparation one time by node 0.
     if global_rank == 0:
-        print("Directory Preparation")
         # Checkpoint folder preparation
-        if (args.multi_gpu_tr == True) and (args.resume_from_checkpoint==False):
-            print("Prepare ckp save folder:", args.save_ckp_path)
-            if os.path.exists(args.save_ckp_path):
-                print("Exit old ckp folder: Delete...")
-                shutil.rmtree(args.save_ckp_path)
-            os.makedirs(args.save_ckp_path, exist_ok=True)
+        if (args.multi_gpu_tr == True) and (args.resume_from_checkpoint is None):
+            if os.path.exists(output_dir):
+                shutil.rmtree(output_dir)
 
 def get_parser(config_file):
     parser = argparse.ArgumentParser(description='Camera Lidar Calibration using Transformer Network')
