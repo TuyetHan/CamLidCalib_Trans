@@ -81,8 +81,13 @@ def load_train_parameter(file):
 
     with open(file, 'r') as f:
         data = yaml.safe_load(f)
+
+    train_params = data.get('TRAIN', {})
+    for key, value in train_params.items():
+        if isinstance(value, list):
+            train_params[key] = str(value)
     
-    return data.get('TRAIN', {})
+    return train_params
 
 
 def merge_cfg_from_list(cfg, cfg_list):
@@ -181,6 +186,7 @@ def result_dir_preparation(args, global_rank):
     if global_rank == 0:
         # Checkpoint folder preparation
         if (args.multi_gpu_tr == True) and (args.resume_from_checkpoint is None):
+            output_dir = os.path.join(args.prj_dir, "checkpoints")
             if os.path.exists(output_dir):
                 shutil.rmtree(output_dir)
 

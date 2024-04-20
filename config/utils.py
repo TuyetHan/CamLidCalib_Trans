@@ -1,12 +1,14 @@
 from typing import Any
 import torch
 import torch.nn as nn
+import os
 
 from torchmetrics import StructuralSimilarityIndexMeasure
 import numpy as np
 import open3d as o3d
 
-def save_pcd(filename:str, points:np.ndarray):
+def save_pcd(root:str, filename:str, points:np.ndarray):
+    filename = os.path.join(root, filename)
     o3d.io.write_point_cloud(filename, 
                 o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points)))
 

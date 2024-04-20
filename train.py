@@ -27,6 +27,7 @@ from torch.distributed.fsdp.fully_sharded_data_parallel import (
     ShardedOptimStateDictConfig,
 )
 config_file = 'CamLidCalib_Trans/config/Trans_Calib_1st.yaml'
+# config_file = 'MyRepo/CamLidCalib_Trans/config/Trans_Calib_1st.yaml'
 
 def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda', 
           save:bool=True, writer:SummaryWriter=None, epochs:int=100, optimizer:torch.optim.Adam=None, 
@@ -50,9 +51,11 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
             # Save the init state
             accelerator.save_state()
 
+    if args.multi_gpu_tr == False: args.logging_type = None
     if args.logging_type is not None:
         hyper_paras = config.load_train_parameter(config_file)
-        accelerator.init_trackers("Transformer_Calib", config=hyper_paras)
+        accelerator.init_trackers("Train_Parameter", config=hyper_paras)
+        log_ep_shift = args.resume_from_checkpoint if args.resume_from_checkpoint is not None else 0
     
     for epoch in range(0, epochs):
         if args.multi_gpu_tr == True:
@@ -91,7 +94,7 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
 
             running_loss += (loss.item() / num_recursive_iter)
             epochLosses += (loss.item() / num_recursive_iter)
-            if i % print_freq == 0:    
+            if i % print_freq == 0:  
                 pred_tran = resT[:, :3, 3].detach().cpu()
                 exp_trans = -transform[:, :3, 3].detach().cpu()
                 pred_rot = resT[:, :3, :3].detach().cpu()
@@ -111,16 +114,30 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
                                     "train_Yaw_loss":Yaw_diff,
                                     "train_Pitch_loss":Pitch_diff, 
                                     "train_Roll_loss":Roll_diff,
-                                    }, step=i + epoch * total_data_loaded)
+                                    }, step=i + (epoch + log_ep_shift) * total_data_loaded)
 
-                save_pcd('./result/predicted_pcd.pcd', genData['pcd']['pred'][0].detach().cpu().numpy())
-                save_pcd('./result/expected_pcd.pcd' , genData['pcd']['exp'][0].detach().cpu().numpy())
+                save_pcd(args.save_pcd_path, 'predicted_pcd.pcd', genData['pcd']['pred'][0].detach().cpu().numpy())
+                save_pcd(args.save_pcd_path, 'expected_pcd.pcd' , genData['pcd']['exp'][0].detach().cpu().numpy())
 
                 print(f'[Epoch: {epoch + 1}, Batch: {i + 1} / {total_data_loaded}], Total loss {running_loss}')
                 running_loss = 0.0
 
         scheduler.step()
-        if epoch % args.save_ckp_freq == 0: accelerator.save_state() 
+
+        # Save the model
+        epochLosses /= (i+1)
+        if minLoss > epochLosses:
+            minLoss = epochLosses
+            print(f"saving model with mean Loss {minLoss}")
+            if args.multi_gpu_tr == True: 
+                accelerator.save_state() 
+            else:
+                torch.save({
+                    'epoch' : epoch,
+                    'minLoss': minLoss,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict()
+                }, os.path.join(args.prj_dir,"checkpoints", "save_"+str(epoch)+".pth"))
 
     if args.logging_type is not None :
         accelerator.end_training()
@@ -148,7 +165,7 @@ if __name__ == "__main__":
         # Initialize accelerator
         project_config = ProjectConfiguration(project_dir=args.prj_dir, automatic_checkpoint_naming=True)
         accelerator = Accelerator(fsdp_plugin=fsdp_plugin, project_config=project_config, log_with=args.logging_type)
-        print('Check plugin: ', accelerator.state.fsdp_plugin)
+        # print('Check plugin: ', accelerator.state.fsdp_plugin)
         
         model = TransformerCalib(device=accelerator.device, args=args)
         device = accelerator.device

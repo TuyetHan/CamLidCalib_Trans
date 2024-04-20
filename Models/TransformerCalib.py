@@ -42,6 +42,7 @@ class TransformerCalib(nn.Module):
         self.rt_hidden_size = args.rt_hidden_size
         self.rt_channels = args.rt_channels
         self.mlp_feature = args.mlp_feature
+        self.pc_arch = args.pc_arch
         self.method = 2
 
         # Camera Feature Extract
