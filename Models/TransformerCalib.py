@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from .VisionTransformer import Cam_ViT
 from .PCTransformer import PC_Trs
+from .PFeatTransformer import PointFeature_Trs
 from .BasicRNN import BasicRNN
 from .Encoder import EncoderBlock
 
@@ -41,6 +42,7 @@ class TransformerCalib(nn.Module):
         self.rt_hidden_size = args.rt_hidden_size
         self.rt_channels = args.rt_channels
         self.mlp_feature = args.mlp_feature
+        self.pc_arch = args.pc_arch
         self.method = 2
 
         # Camera Feature Extract
@@ -52,15 +54,22 @@ class TransformerCalib(nn.Module):
             mlp_hidden=args.mlp_hidden, mlp_dropout=args.mlp_dropout)
 
         # PointCloud Feature Extract
-        self.PCloudTrans = PC_Trs(device = device, feat_dim = args.pc_feat_dim,
-            KP_conv_channels = args.pc_conv_channels, KP_conv_blocks = args.pc_conv_blocks,
+        if args.pc_arch == "PCTrans":
+          self.PCloudTrans = PC_Trs(device = device, feat_dim = args.pc_feat_dim,
+              KP_conv_channels = args.pc_conv_channels, KP_conv_blocks = args.pc_conv_blocks,
 
-            ouput_size = args.pc_out_size, cluster_window_size = args.pc_cluster_window_size,
-            pool_type = args.pc_pool_type, nei_quer_radius = args.pc_nei_quer_radius,
+              ouput_size = args.pc_out_size, cluster_window_size = args.pc_cluster_window_size,
+              pool_type = args.pc_pool_type, nei_quer_radius = args.pc_nei_quer_radius,
 
-            num_neighbor = args.num_neighbor, prev_grid_size=args.prev_grid_size, sigma=args.sigma,
-            mlp_blocks=args.mlp_blocks, mlp_feature = args.mlp_feature, mlp_heads=args.mlp_heads,
-            mlp_hidden=args.mlp_hidden, mlp_dropout=args.mlp_dropout)
+              num_neighbor = args.num_neighbor, prev_grid_size=args.prev_grid_size, sigma=args.sigma,
+              mlp_blocks=args.mlp_blocks, mlp_feature = args.mlp_feature, mlp_heads=args.mlp_heads,
+              mlp_hidden=args.mlp_hidden, mlp_dropout=args.mlp_dropout)
+        elif args.pc_arch == "PFTrans":
+          self.PCloudTrans = PointFeature_Trs(device = device, num_points=args.n_furthest_sam_points, 
+              feat_in_dim=args.pc_feat_dim, n_sample = args.n_neighbor_sample, 
+              radius=args.radius, conv_channels=args.pf_conv_channels,
+              mlp_blocks=args.mlp_blocks, mlp_feature = args.mlp_feature, mlp_heads=args.mlp_heads,
+              mlp_hidden=args.mlp_hidden, mlp_dropout=args.mlp_dropout)
 
         # For Translation and Rotation Estimation
         if self.method == 1:
@@ -105,8 +114,12 @@ class TransformerCalib(nn.Module):
         """
         # Feature Extract
         img_feat = self.CameraTrans(image)
-        # To save memory, PCloudTrans func will modify feature. If need use feature again, please copy it.
-        lidar_feat = self.PCloudTrans(position, feature)  
+
+        if self.pc_arch == "PCTrans":
+          lidar_feat = self.PCloudTrans(position, feature)
+        elif self.pc_arch == "PFTrans":
+          point_wfeat = torch.cat((position, feature.unsqueeze(-1)), dim = 2)
+          lidar_feat = self.PCloudTrans(point_wfeat)  
 
         # # Estimate Rotation and Translation
         # # Q: Should I replace by Attention k = lidar, q,v = img? or concate?
