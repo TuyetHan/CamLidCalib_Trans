@@ -1,17 +1,22 @@
-DATA:
-  data_name: kitti
+PATH:
+# On Laptop
+  # data_root: MyRepo/CamLidCalib_Trans/data/Kitti
+  # save_writter_path: MyRepo/result/torchlogs/
+  # prj_dir: MyRepo/result/
+  # save_pcd_path: MyRepo/result/
+
+# On HPC
   data_root: Dataset/
-  # data_root: data/Kitti
+  save_writter_path: result/torchlogs/
+  prj_dir: /project/p_calibrrn/result
+  save_pcd_path: result/
 
 TRAIN:
   # Network Architecture
-  # arch: TransformerCalib
-  # num point: 7808 OK for BS8,16GPU FSDP
-
   img_depth: 3              # Fixed parameter. Avoid modify
   pc_feat_dim: 1
-  num_points:   8192  #7808 #62464 # 31232 8192  
-  resized_img: 
+  num_points: 65535
+  resized_img:        #[93,311]
 
   mlp_blocks: 2             # For Attention in both Vit and PCtrs
   mlp_feature: 64
@@ -28,6 +33,8 @@ TRAIN:
   cam_conv_channels: 8      
   cam_position_en_method: 1                 # 1,2
 
+  pc_arch: PFTrans   # PCTrans or PFTrans
+  # Point Cloud Transformer
   pc_conv_channels: 3       # PCtrs Configurations
   pc_conv_blocks: 1                         ### problem when > 1
   pc_pool_type: null                        # None, max, avg
@@ -37,6 +44,12 @@ TRAIN:
   num_neighbor: 200
   prev_grid_size: 0.04            # KPConv
   sigma: 1.0
+
+  # Point Feature Transformer
+  n_furthest_sam_points: [1024, 256, 64]
+  n_neighbor_sample: [[16,32,64], [32,64,128], [128,256,512]]
+  radius: [[0.1, 0.2, 0.4], [0.2, 0.4, 0.8], [0.4, 0.8, 1.6]]
+  pf_conv_channels: [[4, 8, 16], [8, 16, 32], [16, 32, 64]]
 
   # training
   batch_size: 8     # 60 batch size for training
@@ -51,17 +64,10 @@ TRAIN:
 
   multi_gpu_tr:  true
   data_parallel: false  # w/o multi_gpu_tr,need one node only.
-  gpu_tracking: true
 
 LOG_CKP:
-  save_writter_path: result/torchlogs/
   logging_type: tensorboard      #all, tensorboard, wandb, comet_ml, None
   print_log_freq: 5
-  save_ckp_path: result/checkpoints2/
   save_ckp_freq: 5
-  prj_dir: /project/p_calibrrn/result
-  resume_from_checkpoint: false
+  resume_from_checkpoint: null   # null or 1,2,... the next iteration number
 
-
-TEST:
-  batch_size_test: 4
