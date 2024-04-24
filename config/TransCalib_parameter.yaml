@@ -6,10 +6,16 @@ PATH:
   # save_pcd_path: MyRepo/result/
 
 # On HPC
-  data_root: Dataset/
-  save_writter_path: result/torchlogs/
-  prj_dir: /project/p_calibrrn/result
-  save_pcd_path: result/
+  #data_root: Dataset/
+  #save_writter_path: result/torchlogs/
+  #prj_dir: /project/p_calibrrn/result
+  # save_pcd_path: result/
+
+# Docker image
+  data_root: /Dataset/
+  save_writter_path: /result/torchlogs/
+  prj_dir: /result/
+  save_pcd_path: /result/
 
 TRAIN:
   # Network Architecture
