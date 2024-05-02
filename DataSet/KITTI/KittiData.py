@@ -6,14 +6,14 @@ import cv2
 import random
 
 class KITTIData(Dataset):
-    def __init__(self, files:list=[], feat_dim = 1, num_point = 62464, img_reshape = None):
+    def __init__(self, files:list=[], feat_dim = 1, num_point = None, img_reshape = None):
         super().__init__()
         self.files = files
         self.angle_limit = 0.34906585039886592
         self.tr_limit = 0.4
         self.eps = 1e-8
         self.feat_dim = feat_dim
-        self.num_point = num_point      #1024 
+        self.num_point = num_point if num_point is not None else 65535 
         self.img_reshape = img_reshape  #(187, 621)
 
     def __len__(self):
@@ -28,7 +28,7 @@ class KITTIData(Dataset):
     def __preprocfeat__(self, pcdPath):
         # return self.feat_dim last collumn of point cloud
         feature = np.fromfile(pcdPath, dtype=np.float32).reshape((-1, 4))[:,-self.feat_dim:]
-        feature = feature[np.random.choice(feature.shape[0], self.num_point, replace=False), :]
+        feature = feature[self.pc_mask, :]
         return torch.tensor(feature, dtype=torch.float32).squeeze()
 
     def getVelo2CamTransform(self, calibVelo2CamPath):
@@ -101,7 +101,8 @@ class KITTIData(Dataset):
         transformed_points = np.matmul(random_transform, points_in_cam_axis)
 
         transformed_points = transformed_points.T
-        transformed_points = transformed_points[np.random.choice(transformed_points.shape[0], self.num_point, replace=False), :]
+        self.pc_mask = np.random.choice(transformed_points.shape[0], self.num_point, replace=False)
+        transformed_points = transformed_points[self.pc_mask, :]
         transformed_points = transformed_points.T
 
         return torch.tensor(transformed_points, dtype=torch.float32), torch.tensor(random_transform, dtype=torch.float32), \
@@ -116,8 +117,8 @@ class KITTIData(Dataset):
         calib_velo_to_cam_path= self.files[idx]['calib_velo_to_cam']
 
         img = self.__preprocImg__(img_path)
-        feature = self.__preprocfeat__(pcd_path)
         depth, randTrans, K = self.__preprocPcd__(pcd_path, calib_cam_to_cam_path, calib_velo_to_cam_path)
+        feature = self.__preprocfeat__(pcd_path)
 
         return {'Image': img, 'Depth': depth, 'Feature': feature, 'Transform': randTrans,
                 'intrinsics': K}
