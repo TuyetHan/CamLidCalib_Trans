@@ -1,7 +1,7 @@
 PATH:
 # On Laptop
   # data_root: MyRepo/CamLidCalib_Trans/data/Kitti
-  # save_writter_path: MyRepo/result/torchlogs/
+  # save_writter_path: logs
   # prj_dir: MyRepo/result/
   # save_pcd_path: MyRepo/result/
 
@@ -13,7 +13,7 @@ PATH:
 
 # Docker image
   data_root: /Dataset/
-  save_writter_path: /result/torchlogs/
+  save_writter_path: logs
   prj_dir: /result/
   save_pcd_path: /result/
 
@@ -21,8 +21,8 @@ TRAIN:
   # Network Architecture
   img_depth: 3              # Fixed parameter. Avoid modify
   pc_feat_dim: 1
-  num_points: 65535
-  resized_img:        #[93,311]
+  num_points: 32767  #32767 #  65535
+  resized_img:  [187,621] #original [375,1242] 
 
   mlp_blocks: 2             # For Attention in both Vit and PCtrs
   mlp_feature: 64
