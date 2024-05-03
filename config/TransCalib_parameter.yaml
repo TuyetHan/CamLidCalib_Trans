@@ -14,6 +14,7 @@ PATH:
 # Docker image
   data_root: /Dataset/
   save_writter_path: logs
+
   prj_dir: /result/
   save_pcd_path: /result/
 
