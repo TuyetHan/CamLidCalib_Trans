@@ -54,90 +54,99 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
     if args.multi_gpu_tr == False: args.logging_type = None
     if args.logging_type is not None:
         hyper_paras = config.load_train_parameter(config_file)
-        accelerator.init_trackers("Train_Parameter", config=hyper_paras)
+        accelerator.init_trackers(args.save_writter_path, config=hyper_paras)
         log_ep_shift = args.resume_from_checkpoint if args.resume_from_checkpoint is not None else 0
     
-    for epoch in range(0, epochs):
-        if args.multi_gpu_tr == True:
-            print('Node', accelerator.process_index , f'Training epoch {epoch + 1}')
-        else:
-            print(f'Training epoch {epoch + 1}')
-
-        running_loss = 0.0
-        genData = None
-        epochLosses = 0.0
-        for i, data in enumerate(train_loader, 0):
-            optimizer.zero_grad()
-            #todo: We could avoid this line since we set the accelerator with `device_placement=True`.
-            img, depth, feat = data['Image'].to(device), data['Depth'].to(device), data['Feature'].to(device)
-            transform, intrinsics = data['Transform'].to(device), data['intrinsics'].to(device)
-
-            resT = torch.eye(4,4, device=device, requires_grad=True).repeat(All_batch_size, 1, 1)
-
-            loss = 0
-            for _ in range(num_recursive_iter):
-                new_depth = depth[:,:3,:].permute(0,2,1)
-                out = model(img, new_depth, feat)
-
-                out = genTransformMat(out)
-                resT = torch.bmm(resT, out)
-                genData = gen_point_cloud_img(depth, resT, transform, intrinsics, img.shape)
-                loss_pointcloud_mse = torch.sqrt(correspondance_point_loss(genData['pcd']['pred'], genData['pcd']['exp']).sum(-1)).sum(-1).mean()
-
-                loss += (loss_pointcloud_mse)
-
+    with torch.profiler.profile(
+        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
+        activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(os.path.join(args.prj_dir,args.save_writter_path)),    # log save path
+        record_shapes=True,
+        profile_memory=True,
+        with_stack=True
+    ) as prof:
+        for epoch in range(0, epochs):
             if args.multi_gpu_tr == True:
-                accelerator.backward(loss)
+                print('Node', accelerator.process_index , f'Training epoch {epoch + 1}')
             else:
-                loss.backward()
-            optimizer.step()
+                print(f'Training epoch {epoch + 1}')
 
-            running_loss += (loss.item() / num_recursive_iter)
-            epochLosses += (loss.item() / num_recursive_iter)
-            if i % print_freq == 0:  
-                pred_tran = resT[:, :3, 3].detach().cpu()
-                exp_trans = -transform[:, :3, 3].detach().cpu()
-                pred_rot = resT[:, :3, :3].detach().cpu()
-                exp_rot = transform[:, :3, :3].permute(0, 2, 1).detach().cpu()
+            running_loss = 0.0
+            genData = None
+            epochLosses = 0.0
+            for i, data in enumerate(train_loader, 0):
+                optimizer.zero_grad()
+                #todo: We could avoid this line since we set the accelerator with `device_placement=True`.
+                img, depth, feat = data['Image'].to(device), data['Depth'].to(device), data['Feature'].to(device)
+                transform, intrinsics = data['Transform'].to(device), data['intrinsics'].to(device)
 
-                running_loss /= print_freq
-                geodesic_dist = rotationLoss(pred_rot, exp_rot)
-                X_diff, Y_diff, Z_diff = translaitionLoss(pred_tran, exp_trans)
-                Yaw_diff, Pitch_diff, Roll_diff = anglesLoss(pred_rot, exp_rot)
+                resT = torch.eye(4,4, device=device, requires_grad=True).repeat(All_batch_size, 1, 1)
 
-                if args.logging_type is not None:
-                    accelerator.log({"train_loss": running_loss, 
-                                    "train_geodesic_loss": geodesic_dist,
-                                    "train_X_loss":X_diff, 
-                                    "train_Y_loss":Y_diff, 
-                                    "train_Z_loss":Z_diff,
-                                    "train_Yaw_loss":Yaw_diff,
-                                    "train_Pitch_loss":Pitch_diff, 
-                                    "train_Roll_loss":Roll_diff,
-                                    }, step=i + (epoch + log_ep_shift) * total_data_loaded)
+                loss = 0
+                for _ in range(num_recursive_iter):
+                    new_depth = depth[:,:3,:].permute(0,2,1)
+                    out = model(img, new_depth, feat)
 
-                save_pcd(args.save_pcd_path, 'predicted_pcd.pcd', genData['pcd']['pred'][0].detach().cpu().numpy())
-                save_pcd(args.save_pcd_path, 'expected_pcd.pcd' , genData['pcd']['exp'][0].detach().cpu().numpy())
+                    out = genTransformMat(out)
+                    resT = torch.bmm(resT, out)
+                    genData = gen_point_cloud_img(depth, resT, transform, intrinsics, img.shape)
+                    loss_pointcloud_mse = torch.sqrt(correspondance_point_loss(genData['pcd']['pred'], genData['pcd']['exp']).sum(-1)).sum(-1).mean()
 
-                print(f'[Epoch: {epoch + 1}, Batch: {i + 1} / {total_data_loaded}], Total loss {running_loss}')
-                running_loss = 0.0
+                    loss += (loss_pointcloud_mse)
 
-        scheduler.step()
+                if args.multi_gpu_tr == True:
+                    accelerator.backward(loss)
+                else:
+                    loss.backward()
+                optimizer.step()
+                prof.step()
 
-        # Save the model
-        epochLosses /= (i+1)
-        if minLoss > epochLosses:
-            minLoss = epochLosses
-            print(f"saving model with mean Loss {minLoss}")
-            if args.multi_gpu_tr == True: 
-                accelerator.save_state() 
-            else:
-                torch.save({
-                    'epoch' : epoch,
-                    'minLoss': minLoss,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict()
-                }, os.path.join(args.prj_dir,"checkpoints", "save_"+str(epoch)+".pth"))
+                running_loss += (loss.item() / num_recursive_iter)
+                epochLosses += (loss.item() / num_recursive_iter)
+                if i % print_freq == 0:  
+                    pred_tran = resT[:, :3, 3].detach().cpu()
+                    exp_trans = -transform[:, :3, 3].detach().cpu()
+                    pred_rot = resT[:, :3, :3].detach().cpu()
+                    exp_rot = transform[:, :3, :3].permute(0, 2, 1).detach().cpu()
+
+                    running_loss /= print_freq
+                    geodesic_dist = rotationLoss(pred_rot, exp_rot)
+                    X_diff, Y_diff, Z_diff = translaitionLoss(pred_tran, exp_trans)
+                    Yaw_diff, Pitch_diff, Roll_diff = anglesLoss(pred_rot, exp_rot)
+
+                    if args.logging_type is not None:
+                        accelerator.log({"train_loss": running_loss, 
+                                        "train_geodesic_loss": geodesic_dist,
+                                        "train_X_loss":X_diff, 
+                                        "train_Y_loss":Y_diff, 
+                                        "train_Z_loss":Z_diff,
+                                        "train_Yaw_loss":Yaw_diff,
+                                        "train_Pitch_loss":Pitch_diff, 
+                                        "train_Roll_loss":Roll_diff,
+                                        }, step=i + (epoch + log_ep_shift) * total_data_loaded)
+
+                    save_pcd(args.save_pcd_path, 'predicted_pcd.pcd', genData['pcd']['pred'][0].detach().cpu().numpy())
+                    save_pcd(args.save_pcd_path, 'expected_pcd.pcd' , genData['pcd']['exp'][0].detach().cpu().numpy())
+
+                    print(f'[Epoch: {epoch + 1}, Batch: {i + 1} / {total_data_loaded}], Total loss {running_loss}')
+                    running_loss = 0.0
+
+            scheduler.step()
+
+            # Save the model
+            epochLosses /= (i+1)
+            if minLoss > epochLosses:
+                minLoss = epochLosses
+                print(f"saving model with mean Loss {minLoss}")
+                if args.multi_gpu_tr == True: 
+                    accelerator.save_state() 
+                else:
+                    torch.save({
+                        'epoch' : epoch,
+                        'minLoss': minLoss,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict()
+                    }, os.path.join(args.prj_dir,"checkpoints", "save_"+str(epoch)+".pth"))
 
     if args.logging_type is not None :
         accelerator.end_training()
@@ -187,7 +196,6 @@ if __name__ == "__main__":
     
     optimizer = torch.optim.Adam(model.parameters(), lr=float(args.learning_rate))
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.sche_step_size, gamma=args.sche_gamma)
-    writer = SummaryWriter(args.save_writter_path)
 
     if args.multi_gpu_tr == True:
         model, optimizer, valid_loader, scheduler = accelerator.prepare(model, optimizer, valid_loader, scheduler)
@@ -198,9 +206,7 @@ if __name__ == "__main__":
         print('Start trainning...')
 
     train(model=model, train_loader=valid_loader, device=device, 
-        optimizer=optimizer, writer=writer, scheduler=scheduler, args=args)
+        optimizer=optimizer, scheduler=scheduler, args=args)
 
     if args.multi_gpu_tr == True: print('Node', accelerator.process_index , 'Success')
     else: print('Success')
-
-    writer.close()
