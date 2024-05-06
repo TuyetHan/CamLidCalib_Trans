@@ -85,12 +85,13 @@ class TransformerCalib(nn.Module):
         self.rotrnn = BasicRNN(self.rt_channels, args.rt_hidden_size, 3)
         self.tranrnn = BasicRNN(self.rt_channels, args.rt_hidden_size, 3)
 
-    def forward(self, image, position, feature):
+    def forward(self, image, position, feature, img_depth = None):
         """
         Args:
           image of shape (batch_size, img height, img width, img_depth): Camera Image
           position of shape (batch_size, number of point, 3): Point Cloud x,y,z value
           feature of shape(batch_size, number of point, D): D can be 1,3,...
+          img_depth of shape (batch_size, img height, img width, 1): Depth Image
 
         Returns:
           z of shape (batch_size, ouput_size): ouput_size is define in the constructor
@@ -98,6 +99,8 @@ class TransformerCalib(nn.Module):
         Note: All intermediate signals should be of shape (max_seq_length, batch_size, n_features).
         """
         # Feature Extract
+        if self.pc_arch == "ImgwDepth":
+          image = torch.cat((image, img_depth), dim = 1)
         img_feat = self.CameraTrans(image)
 
         if self.pc_arch == "PCTrans":
@@ -107,7 +110,10 @@ class TransformerCalib(nn.Module):
           lidar_feat = self.PCloudTrans(point_wfeat)  
 
         # Estimate Rotation and Translation
-        all_feat = torch.cat((img_feat, lidar_feat), dim = 1).reshape(position.size(0), -1, self.mlp_feature)
+        if self.pc_arch == "ImgwDepth":
+          all_feat = img_feat
+        else:
+          all_feat = torch.cat((img_feat, lidar_feat), dim = 1).reshape(position.size(0), -1, self.mlp_feature)
 
         all_feat = self.allFeatPool(all_feat)
         for f in self.EncBlocks:

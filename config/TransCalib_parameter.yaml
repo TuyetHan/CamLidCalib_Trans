@@ -14,13 +14,12 @@ PATH:
 # Docker image
   data_root: /Dataset/
   save_writter_path: logs
-
   prj_dir: /result/
   save_pcd_path: /result/
 
 TRAIN:
   # Network Architecture
-  img_depth: 3              # Fixed parameter. Avoid modify
+  img_depth: 3              # change to 4 for ImgwDepth, others 3
   pc_feat_dim: 1
   num_points: 32767  #32767 #  65535
   resized_img:  [187,621] #original [375,1242] 
@@ -40,7 +39,7 @@ TRAIN:
   cam_conv_channels: 8      
   cam_position_en_method: 1                 # 1,2
 
-  pc_arch: PFTrans   # PCTrans or PFTrans
+  pc_arch: ImgwDepth   # PCTrans or PFTrans or ImgwDepth
   # Point Cloud Transformer
   pc_conv_channels: 3       # PCtrs Configurations
   pc_conv_blocks: 1                         ### problem when > 1

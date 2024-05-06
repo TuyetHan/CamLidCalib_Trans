@@ -26,8 +26,8 @@ from torch.distributed.fsdp.fully_sharded_data_parallel import (
     ShardedStateDictConfig,
     ShardedOptimStateDictConfig,
 )
-config_file = 'CamLidCalib_Trans/config/TransCalib_parameter.yaml'
-# config_file = 'MyRepo/CamLidCalib_Trans/config/TransCalib_parameter.yaml'
+# config_file = 'CamLidCalib_Trans/config/TransCalib_parameter.yaml'
+config_file = 'MyRepo/CamLidCalib_Trans/config/TransCalib_parameter.yaml'
 
 def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda', 
           save:bool=True, writer:SummaryWriter=None, epochs:int=100, optimizer:torch.optim.Adam=None, 
@@ -84,8 +84,13 @@ def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda',
 
                 loss = 0
                 for _ in range(num_recursive_iter):
+                    if args.pc_arch == "ImgwDepth":
+                        img_depth = transformDepth(depth, intrinsics, resT, img.shape)
+                    else: 
+                        img_depth = None
+
                     new_depth = depth[:,:3,:].permute(0,2,1)
-                    out = model(img, new_depth, feat)
+                    out = model(img, new_depth, feat, img_depth)
 
                     out = genTransformMat(out)
                     resT = torch.bmm(resT, out)
