@@ -26,8 +26,8 @@ from torch.distributed.fsdp.fully_sharded_data_parallel import (
     ShardedStateDictConfig,
     ShardedOptimStateDictConfig,
 )
-# config_file = 'CamLidCalib_Trans/config/TransCalib_parameter.yaml'
-config_file = 'MyRepo/CamLidCalib_Trans/config/TransCalib_parameter.yaml'
+config_file = 'CamLidCalib_Trans/config/TransCalib_parameter.yaml'
+# config_file = 'MyRepo/CamLidCalib_Trans/config/TransCalib_parameter.yaml'
 
 def train(model=None, train_loader:DataLoader=None, device:torch.device='cuda', 
           save:bool=True, writer:SummaryWriter=None, epochs:int=100, optimizer:torch.optim.Adam=None, 
