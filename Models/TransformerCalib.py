@@ -72,29 +72,14 @@ class TransformerCalib(nn.Module):
               mlp_hidden=args.mlp_hidden, mlp_dropout=args.mlp_dropout)
 
         # For Translation and Rotation Estimation
-        if self.method == 1:
-          self.avgpoolTran = nn.AdaptiveAvgPool2d(output_size=(1,1))
-          self.bnTran = nn.BatchNorm2d(num_features=self.rt_channels)
-          self.convTran = nn.Conv2d(in_channels=1, out_channels=self.rt_channels,
-                                    kernel_size=(1, 1), stride=(1,1), bias=False)
+        self.allFeatPool = nn.AdaptiveAvgPool2d(output_size=(self.rt_hidden_size,self.rt_channels))
+        self.EncBlocks = nn.ModuleList(
+            [EncoderBlock(n_features=self.rt_channels, n_heads=args.mlp_heads, 
+                          n_hidden=self.rt_hidden_size, dropout=args.mlp_dropout)
+                          for i in range(args.mlp_blocks)])
 
-          self.avgpoolRot = nn.AdaptiveAvgPool2d(output_size=(1,1))
-          self.bnRot = nn.BatchNorm2d(num_features = self.rt_channels)
-          self.convRot = nn.Conv2d(in_channels= 1, out_channels= self.rt_channels,
-                                    kernel_size=(1, 1), stride=(1,1), bias=False)
-
-          self.relu = nn.ReLU(inplace=True)
-          self.dropout = nn.Dropout(p = args.rt_Dropout)
-
-        else:
-          self.allFeatPool = nn.AdaptiveAvgPool2d(output_size=(self.rt_hidden_size,self.rt_channels))
-          self.EncBlocks = nn.ModuleList(
-              [EncoderBlock(n_features=self.rt_channels, n_heads=args.mlp_heads, 
-                            n_hidden=self.rt_hidden_size, dropout=args.mlp_dropout)
-                            for i in range(args.mlp_blocks)])
-
-          self.avgpoolRot  = nn.AdaptiveAvgPool1d(output_size = 1)
-          self.avgpoolTran = nn.AdaptiveAvgPool2d(output_size = 1)
+        self.avgpoolRot  = nn.AdaptiveAvgPool1d(output_size = 1)
+        self.avgpoolTran = nn.AdaptiveAvgPool2d(output_size = 1)
 
         # Output Estimation
         self.rotrnn = BasicRNN(self.rt_channels, args.rt_hidden_size, 3)
@@ -121,25 +106,15 @@ class TransformerCalib(nn.Module):
           point_wfeat = torch.cat((position, feature.unsqueeze(-1)), dim = 2)
           lidar_feat = self.PCloudTrans(point_wfeat)  
 
-        # # Estimate Rotation and Translation
-        # # Q: Should I replace by Attention k = lidar, q,v = img? or concate?
-        if self.method == 1:
-          all_feat = torch.cat((img_feat, lidar_feat), dim = 1).reshape(position.size(0), 1, -1, self.mlp_feature)
-          print('Shape', all_feat.shape)
-          rot_features = self.avgpoolRot(self.dropout(self.relu(self.bnRot(self.convRot(all_feat)))))
-          rot_features = rot_features.flatten(1)
-          tran_features = self.avgpoolTran(self.dropout(self.relu(self.bnTran(self.convTran(all_feat)))))
-          tran_features = tran_features.flatten(1)
-          
-        else:
-          all_feat = torch.cat((img_feat, lidar_feat), dim = 1).reshape(position.size(0), -1, self.mlp_feature)
+        # Estimate Rotation and Translation
+        all_feat = torch.cat((img_feat, lidar_feat), dim = 1).reshape(position.size(0), -1, self.mlp_feature)
 
-          all_feat = self.allFeatPool(all_feat)
-          for f in self.EncBlocks:
-            all_feat = f(all_feat)
+        all_feat = self.allFeatPool(all_feat)
+        for f in self.EncBlocks:
+          all_feat = f(all_feat)
 
-          rot_features  = self.avgpoolRot(all_feat.permute(0,2,1))
-          tran_features = self.avgpoolRot(all_feat.permute(0,2,1))
+        rot_features  = self.avgpoolRot(all_feat.permute(0,2,1))
+        tran_features = self.avgpoolRot(all_feat.permute(0,2,1))
 
         outRot  = self.rotrnn(rot_features.flatten(1))
         outTran = self.tranrnn(tran_features.flatten(1))
