@@ -11,6 +11,7 @@ pip3 install --no-cache-dir "git+https://github.com/facebookresearch/pytorch3d.g
 
 ## Docker
 Pull the Docker image of this repository.
+
 Develop Docker Image:
 ```bash
 docker pull tuyethan/camlidtransformer:cuda118-cudnn8-python310-ubu22.04-deve
@@ -40,16 +41,12 @@ You can control training parameters via :
  - config/ TransCalib_parameter.yaml
 
 ## Dataset
-Use DataSetBuilders folder to download Dataset.
-
-Use check_data_dir.py to check whether it has a suitable directory.
-
-Set data_root inside TransCalib_parameter.yaml to your_data_directory
+ - Use DataSetBuilders folder to download Dataset.
+ - Use check_data_dir.py to check whether it has a suitable directory.
+ - Set data_root inside TransCalib_parameter.yaml to your_data_directory
 
 ## Result, Logs and Checkpoint
-You can set logs and PCD results inside TransCalib_parameter.yaml (prj_dir), the default directory will be CamLidCalib_Trans/result.
-
-If use multi_gpu_tr and logging_type, the training parameter will also automatically save inside prj_dir/save_writter_path.
-
-The checkpoints will be saved in prj_dir/checkpoints, you can resume from checkpoints (resume_from_checkpoint:1,2,...) or start training from scratch (resume_from_checkpoint: null)
+ - You can set logs and PCD results inside TransCalib_parameter.yaml (prj_dir), the default directory will be CamLidCalib_Trans/result.
+ - If use multi_gpu_tr and logging_type, the training parameter will also automatically save inside prj_dir/save_writter_path.
+ - The checkpoints will be saved in prj_dir/checkpoints, you can resume from checkpoints (resume_from_checkpoint:1,2,...) or start training from scratch (resume_from_checkpoint: null)
 
